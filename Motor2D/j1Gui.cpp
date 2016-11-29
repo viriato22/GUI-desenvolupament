@@ -44,6 +44,10 @@ bool j1Gui::PreUpdate()
 // Called after all Updates
 bool j1Gui::PostUpdate()
 {
+	for (p2List_item<UIElement*>* it = elements.start; it != NULL; it = it->next) {
+		if(it->data->active)
+			it->data->Update();
+	}
 	return true;
 }
 
@@ -52,7 +56,88 @@ bool j1Gui::CleanUp()
 {
 	LOG("Freeing GUI");
 
+	DeleteElements();
+
 	return true;
+}
+
+UIElement * j1Gui::CreateElement(GuiType type)
+{
+	UIElement* ret = nullptr;
+
+	switch (type)
+	{
+	case GuiType::image:
+		ret = new GuiImage();
+		ret->type = image;
+		break;
+
+	case GuiType::text:
+		ret = new GuiText();
+		ret->type = text;
+		break;
+	
+	case GuiType::button:
+		ret = new GuiButton();
+		ret->type = button;
+		break;
+
+	}
+
+	if (ret != nullptr) {
+		ret->pos.x = 0;
+		ret->pos.y = 0;
+		ret->texture = atlas;
+		ret->active = true;
+		ret->Start();
+		elements.add(ret);
+	}
+
+	return ret;
+}
+
+UIElement * j1Gui::CreateElement(GuiType type, const char* path)
+{
+	
+	UIElement* ret = nullptr;
+
+	switch (type)
+	{
+	case GuiType::image:
+		ret = new GuiImage();
+		ret->type = image;
+		break;
+
+	case GuiType::text:
+		ret = new GuiText();
+		ret->type = text;
+		break;
+
+	case GuiType::button:
+		ret = new GuiButton();
+		ret->type = button;
+		break;
+	
+	}
+
+	if (ret != nullptr) {
+		ret->pos.x = 0;
+		ret->pos.y = 0;
+		ret->texture = App->tex->Load(path);
+		ret->active = true;
+		ret->Start();
+		elements.add(ret);
+	}
+
+	return ret;
+}
+
+void j1Gui::DeleteElements()
+{
+	for (p2List_item<UIElement*>* it = elements.start; it != NULL; it = it->next) {
+		if(it != nullptr)
+			delete it->data;
+	}
 }
 
 // const getter for atlas
@@ -63,3 +148,87 @@ const SDL_Texture* j1Gui::GetAtlas() const
 
 // class Gui ---------------------------------------------------
 
+void GuiImage::Update()
+{
+	App->render->Blit(this->texture, pos.x, pos.y, &texture_rect);
+}
+
+void GuiText::Update()
+{
+	texture = App->font->Print(string.GetString());
+	App->font->CalcSize(string.GetString(), texture_rect.w, texture_rect.h);
+	
+	App->render->Blit(texture, pos.x, pos.y, &texture_rect);
+}
+
+void GuiButton::Start()
+{
+	state = standard;
+
+	//text = new GuiText();
+	for (int i = standard; i < GuiButton::Unknown; i++) {
+		image[i] = new GuiImage();
+		image[i]->active = true;
+	}
+
+	//text->pos.y = this->pos.y;
+
+	texture_rect = image[standard]->texture_rect;
+
+}
+
+void GuiButton::Update()
+{
+	if (App->input->GetKey(RI_MOUSE_LEFT_BUTTON_DOWN) == KEY_REPEAT) {
+		state = standard;
+	}
+
+	if (state != disabled || state != tabbed) {
+		iPoint mousepos;
+
+		App->input->GetMousePosition(mousepos.x, mousepos.y);
+
+		if (mousepos.x > pos.x && mousepos.x < pos.x + image[standard]->texture_rect.w && mousepos.y > pos.y && mousepos.y < pos.y + image[standard]->texture_rect.h) {
+			state = hover;
+			if (App->input->GetMouseButtonDown(RI_MOUSE_LEFT_BUTTON_DOWN) == KEY_REPEAT)
+				state = left_clicked;
+			if (App->input->GetMouseButtonDown(RI_MOUSE_RIGHT_BUTTON_DOWN) == KEY_REPEAT)
+				state = right_clicked;
+		}
+		else
+			state = standard;
+	
+	}
+
+
+	image[state]->pos.x = this->pos.x;
+	image[state]->pos.y = this->pos.y;
+	//text->pos.x = this->pos.x;
+	//text->pos.y = this->pos.y;
+
+	if (state > standard && state < GuiButton::Unknown) {
+		image[state]->Update();
+	}
+	else
+		image[standard]->Update();
+	
+	//this->text->Update();
+
+}
+
+void UIElement::Move(iPoint movement) {
+	pos.x += movement.x - pos.x;
+	pos.y += movement.y - pos.y;
+
+	for (p2List_item<UIElement*>* element = children.start; element != NULL; element = element->next) {
+		element->data->Move(movement);
+	}
+}
+
+/*
+if (movable) {
+iPoint movement;
+App->input->GetMousePosition(movement.x, movement.y);
+Move(movement);
+}
+*/
